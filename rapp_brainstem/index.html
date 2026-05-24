@@ -157,6 +157,16 @@
     opacity: 0.6;
   }
   #chat-watermark svg { width: 20px; height: 20px; fill: #30363d; }
+  /* Hide the empty-state hint once a real conversation begins */
+  #chat.has-messages #chat-watermark { display: none; }
+
+  /* Model-switch notice (slim centered pill, not a chat bubble) */
+  .model-notice {
+    align-self: center; max-width: 760px; z-index: 2;
+    color: #8b949e; font-size: 11px; font-family: "SF Mono", monospace;
+    background: #161b22; border: 1px solid #30363d; border-radius: 999px;
+    padding: 3px 12px; margin: 2px 0;
+  }
 
   .avatar {
     width: 34px; height: 34px; border-radius: 50%;
@@ -224,7 +234,7 @@
     border: none; border-top: 1px solid #21262d; margin: 12px 0;
   }
   .msg.user .bubble {
-    background: #1f6feb; border-radius: 12px 4px 12px 12px;
+    background: #1f6feb; color: #fff; border-radius: 12px 4px 12px 12px;
     white-space: pre-wrap;
   }
   .msg.system .bubble {
@@ -392,7 +402,7 @@
     padding: 16px; width: 300px; z-index: 50;
     box-shadow: 0 8px 24px rgba(0,0,0,0.4);
     font-size: 13px;
-    max-height: 400px; overflow-y: auto;
+    max-height: 400px; overflow-y: auto; overflow-x: hidden;
   }
   #agents-panel.open { display: block; }
   #agents-panel h3 {
@@ -401,18 +411,64 @@
   }
   .agent-list { list-style: none; margin: 0; padding: 0; }
   .agent-list li {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 8px 0; border-bottom: 1px solid #21262d;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 8px; padding: 8px 0; border-bottom: 1px solid #21262d;
     font-size: 12px;
   }
   .agent-list li:last-child { border-bottom: none; }
-  .agent-list .agent-name { color: #e6edf3; font-family: "SF Mono", monospace; }
+  .agent-list .agent-name { flex: 1; min-width: 0; }
+  .agent-list .agent-title {
+    color: #e6edf3; font-family: "SF Mono", monospace;
+    word-break: break-word; line-height: 1.4;
+  }
+  .agent-list .agent-file {
+    color: #8b949e; font-family: "SF Mono", monospace;
+    font-size: 10px; word-break: break-all; margin-top: 2px;
+  }
+  .agent-list .agent-controls { display: flex; gap: 4px; flex-shrink: 0; }
   .agent-list .export-btn {
     background: #21262d; color: #e6edf3; border: 1px solid #30363d;
     border-radius: 4px; padding: 3px 6px; font-size: 10px;
-    cursor: pointer; transition: all 0.15s;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
   }
   .agent-list .export-btn:hover { border-color: #58a6ff; color: #58a6ff; }
+  .agent-list .del-btn:hover { border-color: #f85149; color: #f85149; }
+
+  /* ── RAR registry search ── */
+  .rar-search { margin: 4px 0 8px; }
+  #rar-search-input {
+    width: 100%; box-sizing: border-box;
+    background: #0d1117; color: #e6edf3;
+    border: 1px solid #30363d; border-radius: 6px;
+    padding: 6px 8px; font-size: 12px; outline: none;
+    transition: border-color 0.15s;
+  }
+  #rar-search-input:focus { border-color: #1f6feb; }
+  .rar-results:not(:empty) { margin-bottom: 12px; padding-bottom: 4px; border-bottom: 1px dashed #30363d; }
+  .rar-section-label {
+    font-size: 10px; color: #8b949e; text-transform: uppercase;
+    letter-spacing: 0.5px; margin: 4px 0 6px;
+  }
+  .rar-status { font-size: 11px; color: #8b949e; padding: 4px 0; }
+  .rar-item {
+    display: flex; gap: 8px; align-items: flex-start;
+    padding: 8px 0; border-bottom: 1px solid #21262d; font-size: 12px;
+  }
+  .rar-item:last-child { border-bottom: none; }
+  .rar-meta { flex: 1; min-width: 0; }
+  .rar-name { color: #e6edf3; font-weight: 600; word-break: break-word; }
+  .rar-desc {
+    color: #8b949e; font-size: 10px; line-height: 1.35; margin-top: 2px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .rar-add-btn {
+    flex-shrink: 0; background: #238636; color: #fff; border: 1px solid #238636;
+    border-radius: 4px; padding: 3px 10px; font-size: 10px; cursor: pointer;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .rar-add-btn:hover { background: #2ea043; }
+  .rar-add-btn:disabled { opacity: 0.6; cursor: default; }
+  .rar-add-btn.added { background: transparent; color: #3fb950; border-color: #238636; }
   
   /* ── Drag & Drop Overlay ── */
   #drop-overlay {
@@ -450,7 +506,7 @@
     background: #f6f8fa;
     border-bottom-color: #d0d7de;
   }
-  body.light-mode header h1, body.light-mode .agent-list .agent-name, body.light-mode .msg.assistant .bubble strong {
+  body.light-mode header h1, body.light-mode .agent-list .agent-title, body.light-mode .msg.assistant .bubble strong {
     color: #24292e;
   }
   body.light-mode .icon-btn, body.light-mode header .controls, body.light-mode .avatar {
@@ -473,6 +529,11 @@
   body.light-mode .msg.assistant .bubble {
     background: #f6f8fa;
     border-color: #d0d7de;
+  }
+  body.light-mode .msg.assistant .bubble h1,
+  body.light-mode .msg.assistant .bubble h2,
+  body.light-mode .msg.assistant .bubble h3 {
+    color: #24292e;
   }
   body.light-mode .msg.assistant .bubble code {
     background: rgba(175, 184, 193, 0.2);
@@ -513,10 +574,13 @@
   body.light-mode #chat-watermark svg {
     fill: #57606a;
   }
+  body.light-mode .model-notice {
+    background: #f6f8fa; border-color: #d0d7de; color: #57606a;
+  }
   body.light-mode #agents-panel {
-    background: rgba(255,255,255,0.95);
-    border-left-color: #d0d7de;
-    box-shadow: -8px 0 24px rgba(0,0,0,0.1);
+    background: #ffffff;
+    border-color: #d0d7de;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
   }
   body.light-mode #agents-panel h3 {
     border-bottom-color: #d0d7de;
@@ -528,6 +592,26 @@
   body.light-mode .agent-list li:hover {
     background: #f6f8fa;
   }
+  body.light-mode .agent-list .agent-file { color: #57606a; }
+  body.light-mode .agent-list .export-btn {
+    background: #f6f8fa; color: #24292e; border-color: #d0d7de;
+  }
+  body.light-mode .agent-list .export-btn:hover { border-color: #0969da; color: #0969da; }
+  body.light-mode .agent-list .del-btn:hover { border-color: #cf222e; }
+  body.light-mode #model-select {
+    background: #ffffff; color: #24292e; border-color: #d0d7de;
+  }
+  body.light-mode #model-select:hover { border-color: #0969da; }
+  body.light-mode #rar-search-input {
+    background: #ffffff; color: #24292e; border-color: #d0d7de;
+  }
+  body.light-mode #rar-search-input:focus { border-color: #0969da; }
+  body.light-mode .rar-results:not(:empty) { border-bottom-color: #d0d7de; }
+  body.light-mode .rar-item { border-color: #d0d7de; }
+  body.light-mode .rar-name { color: #24292e; }
+  body.light-mode .rar-desc,
+  body.light-mode .rar-status,
+  body.light-mode .rar-section-label { color: #57606a; }
   body.light-mode .login-card {
     background: #f6f8fa;
     border-color: #d0d7de;
@@ -553,6 +637,13 @@
     border-color: #d0d7de;
     color: #24292e;
   }
+  body.light-mode #voice-panel h3 { color: #24292e; }
+  body.light-mode #voice-panel .panel-btn {
+    background: #f6f8fa; color: #24292e; border-color: #d0d7de;
+  }
+  body.light-mode #voice-panel .panel-btn:hover { border-color: #0969da; color: #0969da; }
+  body.light-mode #voice-panel .panel-btn.primary { background: #1f883d; border-color: #1f883d; color: #fff; }
+  body.light-mode #voice-panel .panel-btn.primary:hover { background: #1a7f37; }
   body.light-mode .copy-btn {
     background: #f6f8fa;
     border-color: #d0d7de;
@@ -636,6 +727,11 @@
           <span class="icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v4h4v2h-4v4h-2v-4H7v-2h4z"/></svg></span>
           Installed Agents
         </h3>
+        <div class="rar-search">
+          <input id="rar-search-input" type="text" placeholder="Search the RAR agent registry…"
+                 oninput="rarSearch()" autocomplete="off" spellcheck="false">
+        </div>
+        <div id="rar-results" class="rar-results"></div>
         <ul class="agent-list" id="agent-list-ul">
           <!-- Populated by JS -->
         </ul>
@@ -1069,21 +1165,31 @@
         return;
       }
       for (const item of data.files) {
+        // basic_agent.py is the shared base class, not a usable agent — never list it.
+        if (item.filename === 'basic_agent.py') continue;
+
         const li = document.createElement('li');
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'agent-name';
-        
-        let displayTxt = item.filename;
+        const nameWrap = document.createElement('div');
+        nameWrap.className = 'agent-name';
+        nameWrap.title = item.filename;
+
+        const title = document.createElement('div');
+        title.className = 'agent-title';
+        const subtitle = document.createElement('div');
+        subtitle.className = 'agent-file';
         if (item.agents && item.agents.length > 0) {
-          displayTxt = `${item.agents.join(', ')} (${item.filename})`;
+          title.textContent = item.agents.join(', ');
+          subtitle.textContent = item.filename;
+          nameWrap.appendChild(title);
+          nameWrap.appendChild(subtitle);
+        } else {
+          // No loadable agent class (e.g. broken file) — show the filename so it can still be removed.
+          title.textContent = item.filename;
+          nameWrap.appendChild(title);
         }
-        
-        nameSpan.textContent = displayTxt;
-        nameSpan.title = item.filename;
-        
+
         const controls = document.createElement('div');
-        controls.style.display = 'flex';
-        controls.style.gap = '4px';
+        controls.className = 'agent-controls';
 
         const expBtn = document.createElement('button');
         expBtn.className = 'export-btn';
@@ -1093,9 +1199,9 @@
         };
 
         const delBtn = document.createElement('button');
-        delBtn.className = 'export-btn'; // styling reuse
+        delBtn.className = 'export-btn del-btn';
         delBtn.style.color = '#f85149';
-        delBtn.textContent = 'Trsh';
+        delBtn.textContent = 'Delete';
         delBtn.onclick = async () => {
           if (confirm(`Are you sure you want to remove ${item.filename}?`)) {
             try {
@@ -1115,12 +1221,127 @@
         controls.appendChild(expBtn);
         controls.appendChild(delBtn);
 
-        li.appendChild(nameSpan);
+        li.appendChild(nameWrap);
         li.appendChild(controls);
         ul.appendChild(li);
       }
     } catch (e) {
       console.error('Failed to load agents list', e);
+    }
+  }
+
+  // ── RAR Registry Browser ──
+  // Search a public catalog of agents and hot-load any of them into this
+  // brainstem by fetching the raw .py and POSTing it to /agents/import.
+  const RAR_BASE = 'https://raw.githubusercontent.com/kody-w/RAR/main';
+  let rarRegistry = null;     // cached agents array (lazy-loaded on first search)
+  let rarLoading = null;      // in-flight promise, to dedupe concurrent loads
+  let rarSearchTimer = null;
+
+  function loadRarRegistry() {
+    if (rarRegistry) return Promise.resolve(rarRegistry);
+    if (rarLoading) return rarLoading;
+    rarLoading = fetch(`${RAR_BASE}/registry.json`)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(data => { rarRegistry = Array.isArray(data.agents) ? data.agents : []; return rarRegistry; })
+      .finally(() => { rarLoading = null; });
+    return rarLoading;
+  }
+
+  function rarSearch() {
+    clearTimeout(rarSearchTimer);
+    rarSearchTimer = setTimeout(runRarSearch, 200);
+  }
+
+  function runRarSearch() {
+    const q = document.getElementById('rar-search-input').value.trim().toLowerCase();
+    const results = document.getElementById('rar-results');
+    if (!q) { results.innerHTML = ''; return; }
+    results.innerHTML = '<div class="rar-status">Searching the RAR registry…</div>';
+    loadRarRegistry().then(agents => {
+      // Bail if the query changed while the registry was downloading.
+      if (document.getElementById('rar-search-input').value.trim().toLowerCase() !== q) return;
+      const matches = agents.filter(a => {
+        const hay = [a.display_name, a.name, a.description, a.category, ...(a.tags || [])]
+          .filter(Boolean).join(' ').toLowerCase();
+        return hay.includes(q);
+      }).slice(0, 40);
+      renderRarResults(matches);
+    }).catch(() => {
+      results.innerHTML = '<div class="rar-status" style="color:#f85149">Could not reach the RAR registry — check your connection.</div>';
+    });
+  }
+
+  function renderRarResults(matches) {
+    const results = document.getElementById('rar-results');
+    results.innerHTML = '';
+    const label = document.createElement('div');
+    label.className = 'rar-section-label';
+    label.textContent = matches.length
+      ? `RAR registry — ${matches.length} match${matches.length === 1 ? '' : 'es'}`
+      : 'RAR registry';
+    results.appendChild(label);
+    if (!matches.length) {
+      const none = document.createElement('div');
+      none.className = 'rar-status';
+      none.textContent = 'No matching agents found.';
+      results.appendChild(none);
+      return;
+    }
+    for (const a of matches) {
+      const item = document.createElement('div');
+      item.className = 'rar-item';
+
+      const meta = document.createElement('div');
+      meta.className = 'rar-meta';
+      const name = document.createElement('div');
+      name.className = 'rar-name';
+      name.textContent = a.display_name || a.name || (a._file || '').split('/').pop();
+      const desc = document.createElement('div');
+      desc.className = 'rar-desc';
+      desc.textContent = a.description || '';
+      meta.appendChild(name);
+      if (desc.textContent) meta.appendChild(desc);
+
+      const btn = document.createElement('button');
+      btn.className = 'rar-add-btn';
+      btn.textContent = 'Add';
+      btn.title = a._file || '';
+      btn.onclick = () => installRarAgent(a, btn);
+
+      item.appendChild(meta);
+      item.appendChild(btn);
+      results.appendChild(item);
+    }
+  }
+
+  async function installRarAgent(agent, btn) {
+    const path = agent._file;
+    if (!path) { alert('This registry entry has no file path.'); return; }
+    const filename = path.split('/').pop();
+    const orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Adding…';
+    try {
+      // encodeURI preserves '/' and '@' (used in scope dirs) while escaping spaces.
+      const r = await fetch(encodeURI(`${RAR_BASE}/${path}`));
+      if (!r.ok) throw new Error('download failed (HTTP ' + r.status + ')');
+      const code = await r.text();
+      const fd = new FormData();
+      fd.append('file', new Blob([code], { type: 'text/x-python' }), filename);
+      const res = await fetch(`${API}/agents/import`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.status === 'ok') {
+        btn.textContent = 'Added ✓';
+        btn.classList.add('added');
+        loadAgentsList();
+      } else {
+        throw new Error(data.error || 'import failed');
+      }
+    } catch (e) {
+      alert(`Failed to add ${filename}: ${e.message}`);
+      btn.disabled = false;
+      btn.textContent = orig;
     }
   }
 
@@ -1249,8 +1470,18 @@
       });
       const d = await r.json();
       if (d.error) alert(d.error);
-      else appendMsg('system', `Model: ${modelId}`);
+      else appendModelNotice(modelId);
     } catch (e) { alert('Failed to switch model: ' + e.message); }
+  }
+
+  // Slim centered notice for model switches — distinct from chat bubbles.
+  function appendModelNotice(modelId) {
+    const chat = document.getElementById('chat');
+    const note = document.createElement('div');
+    note.className = 'model-notice';
+    note.textContent = `Switched to ${modelId}`;
+    chat.appendChild(note);
+    chat.scrollTop = chat.scrollHeight;
   }
 
   // ── Input ──
@@ -1266,6 +1497,8 @@
   // ── Chat rendering ──
   function appendMsg(role, text, logs) {
     const chat = document.getElementById('chat');
+    // Real conversation has started — retire the empty-state drop hint.
+    if (role !== 'system') chat.classList.add('has-messages');
     const wrap = document.createElement('div');
     wrap.className = `msg ${role}`;
 
@@ -1921,7 +2154,12 @@
     const sidEl = document.getElementById('session-id');
     if (sidEl) sidEl.textContent = '\u2014';
     const chat = document.getElementById('chat');
+    chat.classList.remove('has-messages');
     chat.innerHTML = `
+      <div id="chat-watermark">
+        Drag & Drop .py Agents Here
+        <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
+      </div>
       <div class="msg system">
         <div class="bubble">
           <h2>Welcome to your local RAPP Brainstem!</h2>
