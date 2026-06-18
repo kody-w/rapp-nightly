@@ -1,14 +1,17 @@
 """
-LearnNewAgent - Meta-agent that creates new agents and swarms from natural language.
+LearnNewAgent - Meta-agent that creates new agents and swarms from a description
+PLUS the actual implementation supplied by the calling model.
 
-Describe what you want the agent to do and LearnNewAgent generates,
-saves, and hot-loads it — agents building agents in real-time.
-Generated agents follow the Single File Agent pattern: one file
-containing documentation, metadata contract, and deterministic code.
+The calling model writes the real Python logic itself (passed as `agent_logic`)
+and LearnNew just wraps it in the Single File Agent template — documentation,
+metadata contract, parameter schema, error handling — then saves and hot-loads
+it. The model is already smart enough to write the code; LearnNew does NOT try
+to regenerate it via an external CLI.
 
-v2: adds swarm generation, RAR registry compatibility, and submit workflow.
-Output is dual-compatible — works in local brainstem AND ready for the
-RAR registry (https://github.com/kody-w/RAR).
+Generated agents follow the Single File Agent pattern: one file containing
+documentation, a metadata contract, and deterministic code. Output is
+dual-compatible — works in the local brainstem AND is ready for the RAR
+registry (https://github.com/kody-w/RAR).
 
 Actions:
   create  — Generate and save a single agent (default)
@@ -21,6 +24,7 @@ Actions:
 
 import json
 import re
+import textwrap
 import subprocess
 from pathlib import Path
 from datetime import datetime
@@ -34,16 +38,22 @@ except ImportError:
 __manifest__ = {
     "schema": "rapp-agent/1.0",
     "name": "@rapp/learn_new",
-    "version": "2.0.0",
+    "version": "3.0.0",
     "display_name": "LearnNew",
-    "description": "Creates new RAPP agents or swarms from natural-language descriptions. Generates, saves, and hot-loads them. Output is dual-compatible with brainstem and RAR registry.",
+    "description": "Creates new RAPP agents or swarms. The calling model writes the agent's logic (agent_logic) and LearnNew wraps it into a Single File Agent, then saves and hot-loads it. Output is dual-compatible with brainstem and the RAR registry.",
     "author": "RAPP",
     "tags": ["meta", "generator", "scaffolding", "learn", "swarm"],
     "category": "core",
     "quality_tier": "official",
     "requires_env": [],
     "dependencies": ["@rapp/basic_agent"],
-    "example_call": {"args": {"action": "create", "description": "An agent that summarizes web pages by URL"}},
+    "example_call": {"args": {
+        "action": "create",
+        "agent_name": "WordCounter",
+        "agent_description": "Counts the words in a piece of text.",
+        "agent_parameters": "text: str",
+        "agent_logic": "count = len(text.split())\nreturn json.dumps({\"status\": \"success\", \"word_count\": count})",
+    }},
 }
 
 
@@ -57,8 +67,8 @@ Drop this file into any RAPP brainstem's agents/ directory and it works.
 Compatible with the RAR registry at https://github.com/kody-w/RAR
 ""\"
 
-import json
-{extra_imports}
+{imports}
+
 try:
     from agents.basic_agent import BasicAgent
 except ImportError:
@@ -90,26 +100,33 @@ class {class_name}(BasicAgent):
             "parameters": {{
                 "type": "object",
                 "properties": {{
-                    "query": {{
-                        "type": "string",
-                        "description": "The user\'s request or input."
-                    }}{extra_params}
+{param_properties}
                 }},
-                "required": []
+                "required": {required_json}
             }}
         }}
         super().__init__(name=self.name, metadata=self.metadata)
 
-    def perform(self, **kwargs):
-        """Execute the agent\'s task."""
-        query = kwargs.get('query', '')
-
-{perform_body}
+    def perform(self{signature_params}, **kwargs) -> str:
+        """
+        {short_description}
+{docstring_args}
+        Returns:
+            str: A JSON string describing the result of the operation.
+        """
+        try:
+{logic_body}
+        except Exception as e:
+            return json.dumps({{
+                "status": "error",
+                "agent": "{agent_name}",
+                "message": f"An error occurred in {agent_name}: {{str(e)}}"
+            }})
 
 
 if __name__ == "__main__":
-    a = {class_name}()
-    print(a.perform(query="test"))
+    agent = {class_name}()
+    print(agent.perform({example_invocation}))
 '''
 
     SWARM_SUB_TEMPLATE = '''""\"
@@ -291,32 +308,41 @@ if __name__ == "__main__":
         self.metadata = {
             "name": self.name,
             "description": (
-                "Creates new RAPP agents or swarms from natural-language descriptions. "
-                "Actions: 'create' generates a single agent, 'swarm' creates a multi-agent "
-                "pipeline, 'list' shows generated agents, 'delete' removes one, "
-                "'preview' dry-runs generation, 'submit' prepares a RAR registry submission. "
-                "Call when the user wants to teach the brainstem something new, create a "
-                "custom agent, or build an agent swarm."
+                "Creates a new RAPP agent (or swarm) and hot-loads it. YOU write the "
+                "agent's implementation: pass the real Python code as 'agent_logic' "
+                "(reference the parameters by name, end with a `return` of a string — "
+                "usually json.dumps(...)). LearnNew wraps your code in the Single File "
+                "Agent template with metadata, docstring, and error handling, saves it "
+                "to agents/, and loads it immediately. "
+                "Actions: 'create' generates a single agent, 'swarm' creates a "
+                "multi-agent pipeline, 'list' shows generated agents, 'delete' removes "
+                "one, 'preview' dry-runs generation, 'submit' prepares a RAR submission. "
+                "Call this when the user wants to teach the brainstem a new capability "
+                "or build a custom agent."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "description": {
-                        "type": "string",
-                        "description": "Natural language description of what the new agent should do."
-                    },
-                    "name": {
-                        "type": "string",
-                        "description": "Name for the new agent (optional, will be generated from description)."
-                    },
                     "action": {
                         "type": "string",
-                        "description": "Action to perform.",
+                        "description": "Action to perform. Defaults to 'create'.",
                         "enum": ["create", "swarm", "list", "delete", "preview", "submit"]
                     },
-                    "query": {
+                    "agent_name": {
                         "type": "string",
-                        "description": "Natural language query that may contain the agent description."
+                        "description": "Name for the new agent in CamelCase (e.g. 'WebSummarizer'). Optional — derived from the description if omitted."
+                    },
+                    "agent_description": {
+                        "type": "string",
+                        "description": "A clear, one-or-two sentence description of what the agent does. Becomes the tool description the LLM sees when deciding to call it."
+                    },
+                    "agent_parameters": {
+                        "type": "string",
+                        "description": "Comma-separated list of the agent's parameters as 'name: type' pairs, e.g. 'url: str, limit: int = 5'. Types: str, int, float, bool, list, dict. Defaults (= value) make a parameter optional. Omit for a single 'query: str' parameter."
+                    },
+                    "agent_logic": {
+                        "type": "string",
+                        "description": "The actual Python code for the body of perform(). Reference the declared parameters by name as local variables. Use json (already imported) and any stdlib module you need. MUST end by returning a string (e.g. `return json.dumps({\"status\": \"success\", ...})`). Do NOT include the def line, the try/except, or imports of basic_agent — only the logic. This is the implementation; write it fully, do not leave a stub."
                     },
                     "category": {
                         "type": "string",
@@ -330,7 +356,7 @@ if __name__ == "__main__":
                     },
                     "agents_in_swarm": {
                         "type": "string",
-                        "description": "For swarm: comma-separated sub-agent roles (e.g. 'researcher,writer,editor')."
+                        "description": "For action='swarm': comma-separated sub-agent roles (e.g. 'researcher,writer,editor')."
                     },
                     "requires_env": {
                         "type": "string",
@@ -345,12 +371,14 @@ if __name__ == "__main__":
 
     def perform(self, **kwargs):
         action = kwargs.pop('action', 'create')
-        description = kwargs.pop('description', '')
-        name = kwargs.pop('name', '')
-        query = kwargs.pop('query', '')
 
-        if not description and query:
-            description = query
+        # New contract: caller supplies the implementation; aliases kept for back-compat.
+        description = (kwargs.pop('agent_description', '')
+                       or kwargs.pop('description', '')
+                       or kwargs.pop('query', ''))
+        name = kwargs.pop('agent_name', '') or kwargs.pop('name', '')
+        agent_parameters = kwargs.pop('agent_parameters', '')
+        agent_logic = kwargs.pop('agent_logic', '')
 
         if action == 'list':
             return self._list_generated_agents()
@@ -359,27 +387,38 @@ if __name__ == "__main__":
         elif action == 'preview':
             if kwargs.get('agents_in_swarm'):
                 return self._create_swarm(description, name, write=False, **kwargs)
-            return self._create_agent(description, name, write=False, **kwargs)
+            return self._create_agent(description, name, agent_parameters,
+                                      agent_logic, write=False, **kwargs)
         elif action == 'submit':
-            return self._prepare_submit(description, name, **kwargs)
+            return self._prepare_submit(description, name, agent_parameters,
+                                        agent_logic, **kwargs)
         elif action == 'swarm':
             return self._create_swarm(description, name, write=True, **kwargs)
         else:
-            return self._create_agent(description, name, write=True, **kwargs)
+            return self._create_agent(description, name, agent_parameters,
+                                      agent_logic, write=True, **kwargs)
 
     # ── Single agent creation ─────────────────────────────────────────────
 
-    def _create_agent(self, description, name='', write=True, **kwargs):
-        if not description:
+    def _create_agent(self, description, name='', agent_parameters='',
+                      agent_logic='', write=True, **kwargs):
+        if not description and not name:
             return json.dumps({
                 "status": "error",
-                "message": "Please provide a description of what the agent should do."
+                "message": "Please provide agent_description (and ideally agent_logic — "
+                           "the Python code for what the agent should do)."
             })
 
         if not name:
             name = self._generate_name(description)
 
         name = self._sanitize_name(name)
+        if not re.match(r'^[A-Z][a-zA-Z0-9]*$', name):
+            return json.dumps({
+                "status": "error",
+                "message": f"Invalid agent name '{name}'. Use CamelCase (e.g. 'WebSummarizer')."
+            })
+
         class_name = f"{name}Agent"
         snake = self._to_snake_case(name)
         file_name = f"{snake}_agent.py"
@@ -392,7 +431,19 @@ if __name__ == "__main__":
                            f"Delete it first or choose a different name."
             })
 
-        agent_code = self._generate_agent_code(description, name, class_name, **kwargs)
+        agent_code = self._generate_agent_code(
+            description or name, name, class_name,
+            agent_parameters, agent_logic, **kwargs)
+
+        # Syntax-check before writing so a bad agent_logic never lands a broken file.
+        syntax_err = self._syntax_check(agent_code)
+        if syntax_err:
+            return json.dumps({
+                "status": "error",
+                "message": f"Generated agent has a syntax error: {syntax_err}. "
+                           f"Check the agent_logic you supplied (it becomes the body of perform()).",
+                "code": agent_code,
+            })
 
         if not write:
             return json.dumps({
@@ -422,9 +473,9 @@ if __name__ == "__main__":
             "file_path": str(file_path),
             "lines": len(agent_code.split('\n')),
             "hot_loaded": hot_load_result.get("success", False),
-            "description": description[:200],
+            "description": (description or name)[:200],
             "hint": (
-                f"Agent saved to agents/{file_name} — it will auto-load on next request. "
+                f"Agent saved to agents/{file_name} — it auto-loads on the next request. "
                 f"Edit the perform() method to customize the logic. "
                 f"To submit to RAR, re-run with action='submit'."
             ),
@@ -472,8 +523,7 @@ if __name__ == "__main__":
             sub_filename = f"{sub_snake}_agent.py"
             sub_desc = f"{sub_name} sub-agent for the {swarm_name} swarm."
 
-            perform_body = self._generate_perform_body(
-                f"{role} step for a {description}")
+            perform_body = self._default_swarm_body(role)
 
             sub_code = self.SWARM_SUB_TEMPLATE.format(
                 description=sub_desc,
@@ -490,7 +540,7 @@ if __name__ == "__main__":
                 tags_json=json.dumps([category, "swarm-member", self._to_snake_case(role)]),
                 env_json=json.dumps(env_list),
                 perform_body=perform_body,
-                extra_imports=self._generate_extra_imports(sub_desc),
+                extra_imports="",
             )
 
             if write:
@@ -575,9 +625,11 @@ if __name__ == "__main__":
 
         if write:
             result["message"] += (
-                "All written to agents/ — they auto-load on next request. "
-                "Use SwarmFactory (action=build) to converge them into a "
-                "single shareable singleton file."
+                "All written to agents/ — they auto-load on next request. Each "
+                "sub-agent has a stub perform() — re-run LearnNew with action='create' "
+                "(supplying agent_logic) to flesh out a stage, or edit the files directly. "
+                "Use SwarmFactory (action=build) to converge them into a single "
+                "shareable singleton file."
             )
 
             for f in generated_files:
@@ -591,10 +643,25 @@ if __name__ == "__main__":
 
         return json.dumps(result)
 
+    def _default_swarm_body(self, role):
+        role_safe = role.lower().replace('"', '').replace('\\', '')
+        return (
+            f'        # TODO: implement the {role_safe} stage. Receives `task`, returns a JSON string.\n'
+            f'        return json.dumps({{\n'
+            f'            "status": "ok",\n'
+            f'            "role": "{role_safe}",\n'
+            f'            "task": task,\n'
+            f'            "result": f"{role_safe} stage processed: {{task}}",\n'
+            f'            "data_slush": {{}}\n'
+            f'        }})'
+        )
+
     # ── RAR submission ────────────────────────────────────────────────────
 
-    def _prepare_submit(self, description, name='', **kwargs):
-        preview = json.loads(self._create_agent(description, name, write=False, **kwargs))
+    def _prepare_submit(self, description, name='', agent_parameters='',
+                        agent_logic='', **kwargs):
+        preview = json.loads(self._create_agent(
+            description, name, agent_parameters, agent_logic, write=False, **kwargs))
         if preview.get("status") != "ok":
             return json.dumps(preview)
 
@@ -628,21 +695,6 @@ if __name__ == "__main__":
     # ── Name generation ───────────────────────────────────────────────────
 
     def _generate_name(self, description):
-        try:
-            result = subprocess.run(
-                ['copilot', '--message',
-                 f'Generate a short 1-2 word CamelCase name for an agent that: '
-                 f'{description[:200]}. Reply with ONLY the name, nothing else.'],
-                capture_output=True, text=True, timeout=10
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                name = result.stdout.strip().split('\n')[0]
-                name = re.sub(r'[^a-zA-Z]', '', name)
-                if name and len(name) <= 30:
-                    return name
-        except Exception:
-            pass
-
         words = description.lower().split()
         keywords = [w for w in words if len(w) > 3 and w not in
                     {'that', 'this', 'with', 'from', 'agent', 'create', 'make',
@@ -665,13 +717,133 @@ if __name__ == "__main__":
         s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
         return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
 
+    # ── Parameter parsing ─────────────────────────────────────────────────
+
+    _JSON_TYPES = {
+        'str': 'string', 'int': 'integer', 'float': 'number',
+        'bool': 'boolean', 'list': 'array', 'dict': 'object',
+    }
+
+    def _json_type(self, py_type):
+        base = py_type.strip().lower().split('[')[0]
+        return self._JSON_TYPES.get(base, 'string')
+
+    def _parse_params(self, agent_parameters):
+        """Parse 'name: type = default, other: int' into structured param dicts."""
+        if not agent_parameters or not agent_parameters.strip():
+            agent_parameters = "query: str"
+
+        params = []
+        for raw in agent_parameters.split(','):
+            raw = raw.strip()
+            if not raw:
+                continue
+            if ':' in raw:
+                name, rest = raw.split(':', 1)
+            else:
+                name, rest = raw, 'str'
+            name = re.sub(r'[^a-zA-Z0-9_]', '', name.strip())
+            if not name:
+                continue
+            if name[0].isdigit():
+                name = 'arg_' + name
+            rest = rest.strip()
+            default = None
+            has_default = False
+            if '=' in rest:
+                type_part, default = rest.split('=', 1)
+                default = default.strip()
+                has_default = True
+            else:
+                type_part = rest
+            py_type = (type_part.strip() or 'str')
+            params.append({
+                'name': name,
+                'py_type': py_type,
+                'json_type': self._json_type(py_type),
+                'default': default,
+                'has_default': has_default,
+            })
+        return params
+
+    def _build_signature(self, params):
+        parts = []
+        for p in params:
+            default = p['default'] if p['has_default'] else 'None'
+            parts.append(f"{p['name']}: {p['py_type']} = {default}")
+        return (", " + ", ".join(parts)) if parts else ""
+
+    def _build_properties_block(self, params):
+        lines = []
+        n = len(params)
+        for i, p in enumerate(params):
+            comma = "," if i < n - 1 else ""
+            desc = (f"Value for `{p['name']}`. The assistant provides an appropriate "
+                    f"value based on the user's request.")
+            lines.append(f'                    "{p["name"]}": {{')
+            lines.append(f'                        "type": "{p["json_type"]}",')
+            lines.append(f'                        "description": "{desc}"')
+            lines.append(f'                    }}{comma}')
+        return "\n".join(lines)
+
+    def _build_required(self, params):
+        return [p['name'] for p in params if not p['has_default']]
+
+    def _build_docstring_args(self, params):
+        if not params:
+            return ""
+        lines = ["        Args:"]
+        for p in params:
+            lines.append(
+                f"            {p['name']} ({p['py_type']}): Provided by the assistant "
+                f"based on the user's request.")
+        return "\n".join(lines)
+
+    def _build_example_invocation(self, params):
+        if not params:
+            return ""
+        p = params[0]
+        if p['json_type'] in ('integer', 'number'):
+            val = "1"
+        elif p['json_type'] == 'boolean':
+            val = "True"
+        elif p['json_type'] == 'array':
+            val = "[]"
+        elif p['json_type'] == 'object':
+            val = "{}"
+        else:
+            val = '"test"'
+        return f"{p['name']}={val}"
+
+    def _build_example_args(self, params):
+        example = {}
+        for p in params[:2]:
+            if p['json_type'] in ('integer', 'number'):
+                example[p['name']] = 1
+            elif p['json_type'] == 'boolean':
+                example[p['name']] = True
+            elif p['json_type'] == 'array':
+                example[p['name']] = []
+            elif p['json_type'] == 'object':
+                example[p['name']] = {}
+            else:
+                example[p['name']] = f"example {p['name']}"
+        return example
+
     # ── Code generation ───────────────────────────────────────────────────
 
-    def _generate_agent_code(self, description, name, class_name, **kwargs):
-        perform_body = self._generate_perform_body(description)
-        extra_params = self._generate_extra_params(description)
-        extra_imports = self._generate_extra_imports(description)
+    def _generate_agent_code(self, description, name, class_name,
+                             agent_parameters='', agent_logic='', **kwargs):
+        params = self._parse_params(agent_parameters)
+
+        if not agent_logic or not agent_logic.strip():
+            agent_logic = self._default_logic()
+        logic_body = self._indent_code(agent_logic, 12)
+
+        imports = "\n".join(self._infer_imports(agent_logic, description))
+
         safe_desc = description.replace('"', '\\"').replace('\n', ' ')[:200]
+        short_desc = description.split('\n')[0].replace('"', "'").strip()[:200] or name
         tags = self._generate_tags(description)
         snake = self._to_snake_case(name)
 
@@ -679,42 +851,85 @@ if __name__ == "__main__":
         namespace = (kwargs.get('namespace', '') or 'rapp').lstrip('@')
         env_list = [e.strip() for e in (kwargs.get('requires_env', '') or '').split(",") if e.strip()]
 
-        extra_params_inferred = self._infer_example_params(description)
-        example_args = {}
-        if extra_params_inferred:
-            for p in extra_params_inferred[:2]:
-                example_args[p] = f"example {p}"
-        else:
-            example_args["query"] = "example query"
-
         return self.AGENT_TEMPLATE.format(
             description=description,
             date=datetime.now().strftime("%Y-%m-%d %H:%M"),
             class_name=class_name,
             agent_name=name,
             agent_description=safe_desc,
-            extra_imports=extra_imports,
-            extra_params=extra_params,
-            perform_body=perform_body,
+            short_description=short_desc,
+            imports=imports,
+            signature_params=self._build_signature(params),
+            param_properties=self._build_properties_block(params),
+            required_json=json.dumps(self._build_required(params)),
+            docstring_args=self._build_docstring_args(params),
+            logic_body=logic_body,
+            example_invocation=self._build_example_invocation(params),
             tags_json=json.dumps(tags),
             category=category,
             namespace=namespace,
             snake_name=snake,
             author=namespace,
             env_json=json.dumps(env_list),
-            example_args_json=json.dumps(example_args),
+            # repr() so booleans/None render as valid Python (True/None), since the
+            # manifest is a Python literal, not JSON.
+            example_args_json=repr(self._build_example_args(params)),
         )
 
-    def _infer_example_params(self, description):
-        params = []
-        desc_lower = description.lower()
-        if any(w in desc_lower for w in ['url', 'link', 'website', 'page']):
-            params.append('url')
-        if any(w in desc_lower for w in ['file', 'read', 'write', 'path']):
-            params.append('path')
-        if any(w in desc_lower for w in ['search', 'find', 'look']):
-            params.append('query')
-        return params
+    def _default_logic(self):
+        return (
+            "# No agent_logic was supplied — this is a stub. Edit perform() to implement.\n"
+            "return json.dumps({\n"
+            '    "status": "ok",\n'
+            '    "agent": self.name,\n'
+            '    "inputs": kwargs,\n'
+            '    "note": "This agent has no logic yet. Re-run LearnNew with agent_logic, or edit perform()."\n'
+            "})"
+        )
+
+    def _indent_code(self, code, spaces):
+        """Dedent the supplied code to a common baseline, then re-indent uniformly.
+
+        This makes the wrapper robust whether the caller hands over already-indented
+        code or a flush-left block.
+        """
+        code = textwrap.dedent(code).strip('\n')
+        if not code.strip():
+            code = self._default_logic()
+        pad = ' ' * spaces
+        return '\n'.join(pad + line if line.strip() else '' for line in code.split('\n'))
+
+    def _infer_imports(self, logic, description):
+        """Module-level imports needed by the generated agent.
+
+        `json` is always present (the error handler uses it). Everything else is
+        added only when the supplied logic or description actually references it,
+        so generated files stay clean. Non-stdlib modules (requests, bs4) are still
+        auto-installed by the hot-loader if they end up missing.
+        """
+        text = (logic or '') + '\n' + (description or '')
+        imports = ['import json']
+        mapping = [
+            (r'\bre\.', 'import re'),
+            (r'\bos\.', 'import os'),
+            (r'\bsys\.', 'import sys'),
+            (r'\bmath\.', 'import math'),
+            (r'\brandom\.', 'import random'),
+            (r'\btime\.', 'import time'),
+            (r'\bdatetime\b', 'from datetime import datetime'),
+            (r'\bPath\b', 'from pathlib import Path'),
+            (r'\burllib\.', 'import urllib.request'),
+            (r'\bcsv\.', 'import csv'),
+            (r'\bbase64\.', 'import base64'),
+            (r'\bhashlib\.', 'import hashlib'),
+            (r'\bsubprocess\.', 'import subprocess'),
+            (r'\brequests\.', 'import requests'),
+            (r'\bBeautifulSoup\b', 'from bs4 import BeautifulSoup'),
+        ]
+        for pattern, stmt in mapping:
+            if re.search(pattern, text) and stmt not in imports:
+                imports.append(stmt)
+        return imports
 
     def _generate_tags(self, description):
         tags = []
@@ -733,112 +948,14 @@ if __name__ == "__main__":
                 tags.append(tag)
         return tags or ['custom']
 
-    def _generate_extra_params(self, description):
-        extra = ""
-        desc_lower = description.lower()
-
-        if any(w in desc_lower for w in ['file', 'read', 'write', 'path']):
-            extra += """,
-                    "path": {
-                        "type": "string",
-                        "description": "File or directory path."
-                    }"""
-
-        if any(w in desc_lower for w in ['url', 'http', 'web', 'fetch']):
-            extra += """,
-                    "url": {
-                        "type": "string",
-                        "description": "URL to access."
-                    }"""
-
-        if any(w in desc_lower for w in ['number', 'count', 'amount', 'limit']):
-            extra += """,
-                    "count": {
-                        "type": "integer",
-                        "description": "Number or count value."
-                    }"""
-
-        return extra
-
-    def _generate_perform_body(self, description):
+    def _syntax_check(self, code):
+        """Return None if the generated code parses, else a short error string."""
+        import ast
         try:
-            prompt = (
-                f"Generate ONLY the Python code for the body of a perform() method "
-                f"for an agent that: {description}\n\n"
-                f"Rules:\n"
-                f"- Return a JSON string with status and result\n"
-                f"- Use kwargs.get() to access parameters\n"
-                f"- Keep it simple and functional\n"
-                f"- Do NOT include the method signature, just the body\n"
-                f"- Indent with 8 spaces\n\n"
-                f"Example format:\n"
-                f"        # Process the query\n"
-                f"        result = \"processed: \" + query\n"
-                f'        return json.dumps({{"status": "success", "result": result}})'
-            )
-
-            result = subprocess.run(
-                ['copilot', '--message', prompt],
-                capture_output=True, text=True, timeout=30
-            )
-
-            if result.returncode == 0 and result.stdout.strip():
-                body = result.stdout.strip()
-                if '```python' in body:
-                    body = body.split('```python')[1].split('```')[0]
-                elif '```' in body:
-                    body = body.split('```')[1].split('```')[0]
-
-                lines = body.strip().split('\n')
-                indented = '\n'.join(
-                    '        ' + line.lstrip() if line.strip() else ''
-                    for line in lines
-                )
-                if indented.strip():
-                    return indented
-        except Exception:
-            pass
-
-        return '''        # Default implementation - customize this
-        if not query:
-            return json.dumps({
-                "status": "error",
-                "message": "No query provided"
-            })
-
-        return json.dumps({
-            "status": "success",
-            "query": query,
-            "result": f"Processed by {self.name}: {query}"
-        })'''
-
-    def _generate_extra_imports(self, description):
-        imports = []
-        desc_lower = description.lower()
-
-        import_map = {
-            ('http', 'api', 'fetch', 'url', 'web', 'request'): 'import urllib.request',
-            ('html', 'scrape', 'parse html', 'beautifulsoup'): 'from bs4 import BeautifulSoup',
-            ('csv', 'spreadsheet'): 'import csv',
-            ('xml',): 'import xml.etree.ElementTree as ET',
-            ('datetime', 'date', 'time', 'timestamp'): 'from datetime import datetime',
-            ('regex', 'pattern', 'match'): 'import re',
-            ('file', 'read', 'write', 'path'): 'from pathlib import Path',
-            ('base64', 'encode', 'decode'): 'import base64',
-            ('hash', 'md5', 'sha'): 'import hashlib',
-            ('random', 'shuffle', 'choice'): 'import random',
-            ('sleep', 'wait', 'delay'): 'import time',
-            ('environment', 'env var'): 'import os',
-        }
-
-        for keywords, import_stmt in import_map.items():
-            if any(kw in desc_lower for kw in keywords):
-                if import_stmt not in imports:
-                    imports.append(import_stmt)
-
-        if imports:
-            return '\n'.join(imports) + '\n'
-        return ''
+            ast.parse(code)
+            return None
+        except SyntaxError as e:
+            return f"line {e.lineno}: {e.msg}"
 
     # ── Hot-loading ───────────────────────────────────────────────────────
 
@@ -1020,5 +1137,17 @@ if __name__ == "__main__":
 
 if __name__ == "__main__":
     a = LearnNewAgent()
-    print(a.perform(action="preview",
-                    description="An agent that tracks daily habits and streaks"))
+    print(a.perform(
+        action="preview",
+        agent_name="HabitTracker",
+        agent_description="Tracks daily habits and computes streaks.",
+        agent_parameters="habit: str, days: int = 7",
+        agent_logic=(
+            "streak = min(days, 30)\n"
+            "return json.dumps({\n"
+            '    "status": "success",\n'
+            '    "habit": habit,\n'
+            '    "streak_days": streak\n'
+            "})"
+        ),
+    ))
