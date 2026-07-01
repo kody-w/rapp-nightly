@@ -90,9 +90,16 @@ again. `main` was never at risk.
 
 For risky changes, before merging:
 
-- Drive the sandbox server's web UI by hand (`bash tests/preflight_local.sh fresh`
-  keeps the sandbox alive — open `http://localhost:7091`, chat, switch models,
-  open the panels).
+- Drive the candidate's web UI by hand. `bash tests/preflight_local.sh fresh` keeps
+  the sandbox **files** on disk (its path is printed at the end) but stops the
+  server on exit — relaunch it, then click around:
+
+  ```bash
+  S=/tmp/brainstem-preflight-XXXXXX/home   # printed by the preflight run
+  HOME="$S" PORT=7091 "$S/.brainstem/venv/bin/python" "$S/.brainstem/src/rapp_brainstem/brainstem.py"
+  ```
+
+  Open `http://localhost:7091` — chat, switch models, open the panels.
 - Re-run the Windows leg on demand: `gh workflow run preflight --ref fix/whatever`.
 
 ## 6. Release (the only push to main)
@@ -100,6 +107,9 @@ For risky changes, before merging:
 ```bash
 VERSION=X.Y.Z   # bump rapp_brainstem/VERSION in a release commit on the branch
 echo "$VERSION" > rapp_brainstem/VERSION
+cp install.sh docs/install.sh              # GitHub Pages serves docs/ — the advertised
+cp install.cmd docs/install.cmd            # one-liners pull THESE mirrors, so a release
+cp install.command docs/install.command    # touching an installer must sync them
 git commit -am "release: v$VERSION"
 git push                                   # CI preflight runs once more on the final bytes
 
@@ -114,6 +124,9 @@ Rules:
   the upgrade by comparing this file.
 - Every release gets a `brainstem-vX.Y.Z` tag. Tags are never moved or deleted.
 - Merge only a branch whose **final commit** passed the full preflight.
+- The advertised one-liner (`kody-w.github.io/rapp-installer/install.sh`) is GitHub
+  Pages serving `docs/install.sh` — a byte-for-byte mirror of the root installer.
+  If the mirrors drift, users install different bytes than the repo tests.
 
 ## 7. Post-release smoke (~3 minutes)
 

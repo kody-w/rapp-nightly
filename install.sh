@@ -547,6 +547,11 @@ except: pass
             if [[ "$check_status" == "200" ]]; then
                 echo -e "  ${GREEN}✓${NC} Already authenticated with GitHub Copilot"
                 needs_auth=false
+            elif [[ -z "$check_status" || "$check_status" == "000" ]]; then
+                # curl never reached GitHub (offline, captive portal, timeout) — that
+                # says nothing about the token. Keep it; the server retries live.
+                echo -e "  ${YELLOW}⚠${NC} Couldn't verify the saved token (no network) — keeping it"
+                needs_auth=false
             else
                 echo -e "  ${YELLOW}⚠${NC} Saved token expired — re-authenticating..."
                 rm -f "$token_file"
@@ -690,8 +695,11 @@ with open(sys.argv[2], 'w') as f: json.dump(out, f)
     # When piped (curl | bash), exec can lose the TTY and hang.
     if [ -t 0 ]; then
         exec "$venv_python" brainstem.py
-    elif [ -e /dev/tty ]; then
-        # Piped installer with a controlling terminal available — reattach stdin.
+    elif ( : </dev/tty ) 2>/dev/null; then
+        # Piped installer with a USABLE controlling terminal — reattach stdin.
+        # Test by opening it: the /dev/tty node exists even without a controlling
+        # terminal (ssh without -t, CI), where only the open fails — a bare `-e`
+        # check would take this branch and die on the redirect.
         "$venv_python" brainstem.py </dev/tty
     else
         # No controlling terminal at all (ssh without -t, CI, a container). Reattaching

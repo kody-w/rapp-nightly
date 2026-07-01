@@ -1332,7 +1332,9 @@ def chat():
 
             # Some models use finish_reason "tool_calls", others just include tool_calls in the message
             if msg.get("tool_calls"):
-                print(f"[brainstem] Tool calls triggered (finish_reason={finish}): {[tc['function']['name'] for tc in msg['tool_calls']]}")
+                tc_names = [(tc.get("function") or {}).get("name", "?") if isinstance(tc, dict) else "?"
+                            for tc in msg["tool_calls"]]
+                print(f"[brainstem] Tool calls triggered (finish_reason={finish}): {tc_names}")
                 tool_results, logs = run_tool_calls(msg["tool_calls"], agents, session_id=session_id)
                 all_logs.extend(logs)
                 messages.extend(tool_results)
@@ -1350,9 +1352,9 @@ def chat():
                 reply = (final_response["choices"][0]["message"].get("content") or "").strip()
             except Exception as e:
                 print(f"[brainstem] Final tool-less completion failed: {e}")
-        if not reply:
-            reply = ("I couldn't finish that within the available tool steps. "
-                     "Try rephrasing, or breaking it into smaller steps.")
+            if not reply:
+                reply = ("I couldn't finish that within the available tool steps. "
+                         "Try rephrasing, or breaking it into smaller steps.")
 
         result = {
             "response": reply,

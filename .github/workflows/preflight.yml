@@ -38,7 +38,8 @@ jobs:
           bash -n install.command
           bash -n community_rapp/install.sh
           bash -n rapp_brainstem/start.sh
-          bash tests/test_installer.sh
+          bash -n tests/test_installer.sh
+          bash -n tests/preflight_local.sh
 
       - name: PowerShell parse + PS 5.1 compatibility
         shell: pwsh
@@ -69,6 +70,11 @@ jobs:
           python -m py_compile brainstem.py local_storage.py agents/*.py
           pip install -q -r requirements.txt pytest
           python -m pytest test_local_agents.py test_model_selection.py test_polish.py -q
+
+      # Must run AFTER setup-python + pip install — the suite imports brainstem
+      # (flask, requests, dotenv) and runs pytest itself.
+      - name: installer test suite
+        run: bash tests/test_installer.sh
 
   # ── Real installs on fresh VMs, both platforms, fresh + upgrade ─────────────
   e2e:
@@ -156,10 +162,12 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          # Same decode path as `irm | iex`: UTF-8 content executed by 5.1.
-          $script = Get-Content -Raw -Encoding UTF8 install.ps1
-          $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
-          Start-Process powershell -ArgumentList '-ExecutionPolicy','Bypass','-EncodedCommand',$enc `
+          # Same execution path as `irm | iex` (script text through iex, no
+          # $PSCommandPath) — but only a tiny bootstrap is encoded: base64 of the
+          # whole installer would blow the 32,767-char command-line limit.
+          $boot = "iex (Get-Content -Raw -Encoding UTF8 '$PWD\install.ps1')"
+          $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($boot))
+          Start-Process powershell -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand',$enc `
             -RedirectStandardOutput "$env:RUNNER_TEMP\install.log" `
             -RedirectStandardError "$env:RUNNER_TEMP\install.err" -NoNewWindow
 

@@ -231,9 +231,22 @@ for agent_file in manage_memory_agent context_memory_agent hacker_news_agent; do
 done
 
 # Drive the REAL loader (which registers the utils/basic_agent shims the memory
-# agents import) so this exercises the same path a live /chat request would. The
-# `|| true` keeps a failure reportable instead of aborting the whole suite under set -e.
-AGENT_TEST=$(cd "$REPO_ROOT/rapp_brainstem" && python3 -c "
+# agents import) so this exercises the same path a live /chat request would — but
+# against a temp dir holding only the GIT-TRACKED agents, so a local drop-in can't
+# fail (or pip-install mid-run during) a check of the BUNDLED set. The `|| true`
+# keeps a failure reportable instead of aborting the whole suite under set -e.
+TMP_AGENTS=$(mktemp -d "${TMPDIR:-/tmp}/brainstem-agents-XXXXXX")
+for f in "$REPO_ROOT"/rapp_brainstem/agents/*.py; do
+    base=$(basename "$f")
+    if (cd "$REPO_ROOT" && git ls-files --error-unmatch "rapp_brainstem/agents/$base" >/dev/null 2>&1); then
+        cp "$f" "$TMP_AGENTS/"
+    fi
+done
+# Not a git checkout (tarball)? Fall back to everything rather than testing nothing.
+if ! ls "$TMP_AGENTS"/*_agent.py >/dev/null 2>&1; then
+    cp "$REPO_ROOT"/rapp_brainstem/agents/*.py "$TMP_AGENTS/" 2>/dev/null || true
+fi
+AGENT_TEST=$(cd "$REPO_ROOT/rapp_brainstem" && AGENTS_PATH="$TMP_AGENTS" python3 -c "
 import sys
 sys.path.insert(0, '.')
 import brainstem
@@ -245,6 +258,7 @@ for a in agents.values():
     assert t['type'] == 'function' and t['function']['name'], t
 print('ok')
 " 2>&1) || true
+rm -rf "$TMP_AGENTS"
 if [ "$(printf '%s' "$AGENT_TEST" | tail -1)" = "ok" ]; then
     pass "bundled agents load and expose valid tool schemas"
 else

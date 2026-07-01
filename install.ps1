@@ -609,4 +609,7 @@ try {
     Write-Host "      Nothing was launched. Fix the issue above and re-run the installer." -ForegroundColor Yellow
     Write-Host "      Need help? Open an issue at https://github.com/kody-w/rapp-installer/issues" -ForegroundColor Gray
     Write-Host ""
+    # `irm | iex` has no $PSCommandPath — return to the prompt quietly. A file-based
+    # run (CI, a saved script) must still report failure through the exit code.
+    if ($PSCommandPath) { exit 1 }
 }

@@ -42,6 +42,11 @@ SERVER_PID=""
 
 mkdir -p "$FAKE_HOME" "$SHIMS"
 
+# Pin git's --global scope to an explicit sandbox file. Overriding HOME alone is
+# not enough: with XDG_CONFIG_HOME set and no fake ~/.gitconfig yet, git would
+# write the insteadOf rewrite into the user's REAL $XDG_CONFIG_HOME/git/config.
+export GIT_CONFIG_GLOBAL="$FAKE_HOME/.gitconfig"
+
 cleanup() {
     if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
         kill "$SERVER_PID" 2>/dev/null || true
@@ -112,16 +117,8 @@ EOF
     echo "  ✓ seeded production baseline ($(git -C "$FAKE_HOME/.brainstem/src" rev-parse --short HEAD)) + user files"
 fi
 
-# ── 4. Optional: real token for an end-to-end /chat test ─────────────────────
-if [ "$AUTH" = true ]; then
-    for f in .copilot_token .copilot_session; do
-        if [ -f "$REPO_ROOT/rapp_brainstem/$f" ]; then
-            mkdir -p "$FAKE_HOME/.brainstem/src/rapp_brainstem"
-            cp "$REPO_ROOT/rapp_brainstem/$f" "$FAKE_HOME/.brainstem/src/rapp_brainstem/$f"
-        fi
-    done
-    echo "  ✓ copied real Copilot token into sandbox (stays inside $SANDBOX)"
-fi
+# (The optional --auth token copy happens AFTER the install — see step 6b — because
+# install.sh's fresh path re-clones $HOME/.brainstem/src, which would wipe it.)
 
 # ── 5. Run the REAL installer inside the sandbox ─────────────────────────────
 echo ""
@@ -151,6 +148,17 @@ for i in $(seq 1 60); do
 done
 if [ "$up" != true ]; then
     echo "  ✗ server never came up — last 40 log lines:"; tail -40 "$LOG"; exit 1
+fi
+
+# ── 6b. Optional: real token for an end-to-end /chat test ────────────────────
+# Seeded post-install (the server reads auth lazily, per request, so this works).
+if [ "$AUTH" = true ]; then
+    for f in .copilot_token .copilot_session; do
+        if [ -f "$REPO_ROOT/rapp_brainstem/$f" ]; then
+            cp "$REPO_ROOT/rapp_brainstem/$f" "$FAKE_HOME/.brainstem/src/rapp_brainstem/$f"
+        fi
+    done
+    echo "  ✓ copied real Copilot token into sandbox (stays inside $SANDBOX)"
 fi
 
 PASS=0; FAIL=0
