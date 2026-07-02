@@ -14,7 +14,7 @@
 
 ```
 branch  →  local checks  →  local preflight  →  push branch  →  CI preflight  →  release
- (never    (pytest, syntax)  (real install      (never main)    (6 fresh VMs:     (tag + merge
+ (never    (pytest, syntax)  (real install      (never main)    (7 fresh VMs:     (tag + merge
   main)                       in a sandbox)                      win/mac/linux
                                                                  × fresh/upgrade)   to main)
 ```
@@ -63,7 +63,7 @@ custom agent, an edited `soul.md`, and an edited `.env` all **survive the upgrad
 `--auth` copies your real Copilot token into the sandbox for one true end-to-end
 `/chat` answer. The token never leaves the sandbox; the sandbox is disposable.
 
-## 4. Push the branch → CI preflight (~10 minutes, 6 real machines)
+## 4. Push the branch → CI preflight (~10 minutes, 7 real machines)
 
 ```bash
 git push -u origin fix/whatever

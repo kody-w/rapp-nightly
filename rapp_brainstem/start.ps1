@@ -45,10 +45,28 @@ function Test-Deps {
 
 if (-not (Test-Deps)) {
     Write-Host "Installing dependencies..." -ForegroundColor Yellow
+    # The base Python may lack pip entirely (corp images, stripped installs) —
+    # restore it from the stdlib before the first pip call, or every install
+    # below is guaranteed "No module named pip" noise.
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $py -m pip --version 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Python has no pip — bootstrapping via ensurepip..." -ForegroundColor Yellow
+            & $py -m ensurepip --upgrade --default-pip 2>&1 | ForEach-Object { "$_" }
+        }
+    } finally { $ErrorActionPreference = $prev }
     & $py -m pip install -r requirements.txt -q
     if (-not (Test-Deps)) {
         & $py -m pip install -r requirements.txt
     }
+}
+
+if (-not (Test-Deps)) {
+    Write-Host "ERROR: Python dependencies are missing and could not be installed." -ForegroundColor Red
+    Write-Host "       Try: $py -m ensurepip --upgrade   then: $py -m pip install -r requirements.txt" -ForegroundColor Yellow
+    exit 1
 }
 
 # Check gh CLI (optional — the web login flow works without it)

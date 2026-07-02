@@ -105,6 +105,69 @@ function Resolve-PythonExe {
     return "python"
 }
 
+function Test-PipWorks {
+    param([string]$Py)
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $Py -m pip --version 2>&1 | Out-Null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+}
+
+function Ensure-Pip {
+    # A found Python is NOT guaranteed to have pip. Corp-managed images and
+    # stripped/partial installs ship a working python.exe with no pip module —
+    # seen in the wild on a fresh Windows 11 machine: every pip call printed
+    # "No module named pip", then the server died at `import requests` behind a
+    # dead localhost:7071 browser tab. Bootstrap order: ensurepip (stdlib,
+    # works offline, restores the pip bundled with Python) -> get-pip.py (network).
+    # Returns $true only when `python -m pip` actually works.
+    $py = Resolve-PythonExe
+    if (Test-PipWorks $py) { return $true }
+
+    Write-Host "  [..] Python has no pip — bootstrapping via ensurepip..." -ForegroundColor Yellow
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $py -m ensurepip --upgrade --default-pip 2>&1 | ForEach-Object { "$_" }
+    } catch {
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+    if (Test-PipWorks $py) {
+        Write-Host "  [OK] pip bootstrapped via ensurepip" -ForegroundColor Green
+        return $true
+    }
+
+    Write-Host "  [..] ensurepip unavailable — fetching get-pip.py..." -ForegroundColor Yellow
+    $getPip = Join-Path $env:TEMP "rapp-get-pip.py"
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile $getPip -UseBasicParsing -TimeoutSec 120
+        & $py $getPip 2>&1 | ForEach-Object { "$_" }
+    } catch {
+    } finally {
+        $ErrorActionPreference = $prev
+        Remove-Item $getPip -Force -ErrorAction SilentlyContinue
+    }
+    if (Test-PipWorks $py) {
+        Write-Host "  [OK] pip bootstrapped via get-pip.py" -ForegroundColor Green
+        return $true
+    }
+
+    Write-Host "  [X] Python at '$py' has no pip and it could not be bootstrapped." -ForegroundColor Red
+    Write-Host "      Fix it manually, then re-run this installer:" -ForegroundColor Yellow
+    Write-Host "        `"$py`" -m ensurepip --upgrade --default-pip" -ForegroundColor Cyan
+    Write-Host "      Or reinstall Python from https://python.org with 'pip' checked." -ForegroundColor Yellow
+    return $false
+}
+
 function Check-Prerequisites {
     Write-Host "Checking prerequisites..."
 
@@ -329,6 +392,10 @@ function Install-Brainstem {
 function Run-PipInstall {
     $reqFile = "$BRAINSTEM_HOME\src\rapp_brainstem\requirements.txt"
     $py = Resolve-PythonExe
+    # Without pip every install below is guaranteed noise — bootstrap it first.
+    # On $false, Ensure-Pip already printed the actionable fix; the dep gates in
+    # Setup-Dependencies / Launch-Brainstem turn that into an honest failure.
+    if (-not (Ensure-Pip)) { return }
     # Use the call operator, NOT Start-Process (same reasoning as Check-PythonDeps):
     # the call operator quotes a $reqFile path containing spaces correctly, and it
     # needs no console attachment — Start-Process -NoNewWindow -Wait can block
@@ -374,10 +441,14 @@ function Setup-Dependencies {
     Write-Host "Installing dependencies..."
     Push-Location "$BRAINSTEM_HOME\src\rapp_brainstem"
     Run-PipInstall
-    if (-not (Check-PythonDeps)) {
-        Write-Host "  [!] Some dependencies may not have installed correctly" -ForegroundColor Yellow
-    }
+    $depsOk = Check-PythonDeps
     Pop-Location
+    if (-not $depsOk) {
+        # Never print [OK] and continue toward a server that will die at
+        # `import requests` behind a dead browser tab — stop here, honestly,
+        # with the guidance Ensure-Pip/pip printed above.
+        throw "Python dependencies failed to install (see messages above)"
+    }
     Write-Host "  [OK] Dependencies installed" -ForegroundColor Green
 }
 
@@ -566,6 +637,12 @@ function Launch-Brainstem {
     if (-not (Check-PythonDeps)) {
         Write-Host "  [..] Installing missing dependencies..." -ForegroundColor Yellow
         Run-PipInstall
+        if (-not (Check-PythonDeps)) {
+            Pop-Location
+            # Launching anyway would crash at `import requests` and strand the user
+            # on a browser tab pointing at a server that never bound port 7071.
+            throw "Python dependencies are missing and could not be installed (see messages above)"
+        }
     }
 
     # Open browser after a delay

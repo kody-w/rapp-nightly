@@ -11,6 +11,9 @@
 #   fresh   — factory machine, no prior install (the new-user path)
 #   upgrade — machine already running REAL production main, upgraded to the
 #             candidate (the existing-user path; asserts soul/agents/.env survive)
+#   fresh-nopip — Windows only: Python exists but has NO pip module (corp-managed
+#             images, stripped installs — the machine class behind the v0.6.2
+#             field failure). The installer must bootstrap pip itself.
 #
 # See RELEASING.md for the full release process this belongs to.
 
@@ -84,6 +87,9 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
         scenario: [fresh, upgrade]
+        include:
+          - os: windows-latest
+            scenario: fresh-nopip
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -93,6 +99,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      # Recreate the machine class behind the v0.6.2 field failure (2026-07-02):
+      # Python is present and healthy but `python -m pip` fails with "No module
+      # named pip". Without a pip bootstrap the installer dies at `import requests`
+      # and the server never binds 7071 — this leg is red on v0.6.2 bytes.
+      - name: strip pip from Python (fresh-nopip)
+        if: matrix.scenario == 'fresh-nopip'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          python -m pip uninstall -y pip 2>&1 | Out-String | Write-Host
+          python -m pip --version 2>&1 | Out-String | Write-Host
+          if ($LASTEXITCODE -eq 0) { Write-Host 'strip failed — pip still importable'; exit 1 }
+          Write-Host 'pip stripped: python -m pip now fails, as on the field machine'
+          exit 0
 
       # The fake origin: a bare repo whose `main` IS the candidate commit.
       # url.insteadOf makes the unmodified installers clone/fetch it instead of GitHub.
