@@ -37,8 +37,15 @@ mirror docs/install.cmd     install.cmd
 mirror docs/install.command install.command
 
 # ---- Layer 2: mechanical rewrite (order matters — Pages URL first) ----
+# Only repo-IDENTITY references are rewritten mechanically. Content-repo
+# references (kody-w/CommunityRAPP, kody-w/AI-Agent-Templates, kody-w/RAR)
+# map to different downstream targets or in-repo paths and are handled by the
+# downstream scrub, not here.
 rewrite kody-w.github.io/rapp-installer microsoft.github.io/aibast-agents-library
 rewrite kody-w/rapp-installer microsoft/aibast-agents-library
+# Get Help (SUPPORT_REPO in brainstem.py, added v0.6.7) files issues to the
+# support repo upstream; downstream it must file to aibast's own issue tracker.
+rewrite kody-w/rapp-support microsoft/aibast-agents-library
 
 # ---- Layer 3: downstream-owned files with an upstream counterpart ----
 # (sync never touches these; it prints the drift so a human can decide)
