@@ -1987,4 +1987,21 @@ if __name__ == "__main__":
     _tlog("server.agents_loaded", {"agents": list(agents.keys())})
     _load_pending_login()  # Resume any in-progress device code login
     _tlog("server.ready", {"url": f"http://localhost:{PORT}"})
+
+    # HTTPServer.server_bind reverse-DNS-resolves the bind address between bind()
+    # and listen(); on networks whose resolver drops those queries this stalls
+    # startup ~30s with the port bound but not yet accepting, so the installer's
+    # browser tab opens onto a dead port (#14). The looked-up name is only the
+    # WSGI SERVER_NAME default — the bind address itself works fine.
+    import http.server
+    import socketserver
+
+    def _server_bind_no_rdns(self):
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = host
+        self.server_port = port
+
+    http.server.HTTPServer.server_bind = _server_bind_no_rdns
+
     app.run(host="0.0.0.0", port=PORT, debug=False)

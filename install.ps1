@@ -658,8 +658,20 @@ function Launch-Brainstem {
 
     Push-Location "$BRAINSTEM_HOME\src\rapp_brainstem"
 
-    # Open browser after a delay
-    Start-Job -ScriptBlock { Start-Sleep -Seconds 3; Start-Process "http://localhost:7071" } | Out-Null
+    # Open the browser once the server actually answers (#14) — a fixed delay
+    # races cold startups and lands the user on a dead-port error page. Poll
+    # /health, then open; after 60s open anyway so the user still gets the tab.
+    Start-Job -ScriptBlock {
+        for ($i = 0; $i -lt 60; $i++) {
+            try {
+                Invoke-WebRequest -Uri "http://localhost:7071/health" -UseBasicParsing -TimeoutSec 1 | Out-Null
+                break
+            } catch {
+                Start-Sleep -Seconds 1
+            }
+        }
+        Start-Process "http://localhost:7071"
+    } | Out-Null
 
     $py = Resolve-PythonExe
     & $py brainstem.py
