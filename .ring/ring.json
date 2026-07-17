@@ -1,0 +1,11 @@
+{
+  "schema": "rapp-ring/1",
+  "name": "nightly",
+  "repository": "kody-w/rapp-nightly",
+  "pages_url": "https://kody-w.github.io/rapp-nightly",
+  "support_repository": "kody-w/rapp-nightly",
+  "parent": "canary",
+  "protected_paths": [
+    ".ring/"
+  ]
+}
