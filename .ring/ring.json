@@ -20,6 +20,16 @@
       "from": "kody-w/rapp-support",
       "to": "kody-w/rapp-nightly",
       "expected_count": 4
+    },
+    {
+      "from": "rapp-installer.git",
+      "to": "rapp-nightly.git",
+      "expected_count": 1
+    },
+    {
+      "from": "public rapp-installer repo",
+      "to": "public Nightly repo",
+      "expected_count": 1
     }
   ],
   "protected_paths": [
