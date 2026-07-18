@@ -1,0 +1,15 @@
+{
+  "schema": "rapp-ring-promotion/1",
+  "source": {
+    "commit": "3466146ea158a7b018957cfad3badfd4659ae24e",
+    "repository": "kody-w/rapp-canary",
+    "ring": "canary",
+    "shared_sha256": "e113fcf6422eb110baa076e265f6b7fa0ffe106ce3dc0e2fec830dc10b5112c2",
+    "tree": "d1edfad48c7f904a3d8ac57dde5feb788ee0a531"
+  },
+  "target": {
+    "base_commit": "5f8caa6f7cc873744763e3eb9aa2a027bd1e15bd",
+    "repository": "kody-w/rapp-nightly",
+    "ring": "nightly"
+  }
+}
