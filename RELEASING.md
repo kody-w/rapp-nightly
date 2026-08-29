@@ -68,7 +68,7 @@ checkout's `.git` directory first, forcing the destructive re-clone fallback.
 `--auth` copies your real Copilot token into the sandbox for one true end-to-end
 `/chat` answer. The token never leaves the sandbox; the sandbox is disposable.
 
-## 4. Push the branch → CI preflight (~10 minutes, full installer matrix)
+## 4. Push the branch → CI preflight (~10 minutes, 10 installer legs)
 
 ```bash
 git push -u origin fix/whatever
@@ -90,7 +90,7 @@ that is what `irm | iex` uses on a stock Windows machine. GitHub auth endpoints 
 black-holed in the VM's hosts file, which also proves the installer degrades
 gracefully with no network to GitHub auth (it must skip to launch, never hang or die).
 
-**All workflow jobs green = the branch is releasable.** Any red = fix on the branch, push
+**All 11 workflow jobs green = the branch is releasable.** Any red = fix on the branch, push
 again. `main` was never at risk.
 
 ## 5. Optional: manual wild check
